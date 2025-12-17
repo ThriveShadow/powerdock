@@ -8,8 +8,7 @@ import {
   signInWithPopup,
   onAuthStateChanged,
 } from "firebase/auth";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
-import { auth, provider, db } from "@/lib/firebase";
+import { auth, provider } from "@/lib/firebase";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -19,22 +18,30 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // 🔐 Check auth state and sync user
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        const ref = doc(db, "users", user.uid);
-        const snap = await getDoc(ref);
+      if (!user) return;
 
-        if (!snap.exists()) {
-          router.push("/onboarding");
-          return;
-        }
+      try {
+        const token = await user.getIdToken();
 
-        const data = snap.data();
-        if (!data.name || !data.phone) router.push("/onboarding");
+        const res = await fetch("/api/auth/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
+
+        const { needsOnboarding } = await res.json();
+
+        if (needsOnboarding) router.push("/onboarding");
         else router.push("/dashboard");
+      } catch (err) {
+        console.error(err);
+        setError("Failed to sync user");
       }
     });
+
     return () => unsub();
   }, [router]);
 
@@ -45,57 +52,61 @@ export default function LoginPage() {
 
     try {
       let userCred;
-      if (isRegister)
-        userCred = await createUserWithEmailAndPassword(auth, email, password);
-      else userCred = await signInWithEmailAndPassword(auth, email, password);
+
+      if (isRegister) {
+        userCred = await createUserWithEmailAndPassword(
+          auth,
+          email,
+          password
+        );
+      } else {
+        userCred = await signInWithEmailAndPassword(auth, email, password);
+      }
 
       const user = userCred.user;
-      const ref = doc(db, "users", user.uid);
-      const snap = await getDoc(ref);
+      const token = await user.getIdToken();
 
-      if (!snap.exists()) {
-        await setDoc(ref, {
-          email: user.email,
-          balance: 0,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-        router.push("/onboarding");
-      } else {
-        const data = snap.data();
-        if (!data.name || !data.phone) router.push("/onboarding");
-        else router.push("/dashboard");
-      }
+      const res = await fetch("/api/auth/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+
+      const { needsOnboarding } = await res.json();
+
+      if (needsOnboarding) router.push("/onboarding");
+      else router.push("/dashboard");
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Authentication failed");
     } finally {
       setLoading(false);
     }
   };
 
   const handleGoogle = async () => {
+    setError("");
     try {
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
-      const ref = doc(db, "users", user.uid);
-      const snap = await getDoc(ref);
+      const token = await user.getIdToken();
 
-      if (!snap.exists()) {
-        await setDoc(ref, {
-          email: user.email,
-          name: user.displayName || "",
-          balance: 0,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-        router.push("/onboarding");
-      } else {
-        const data = snap.data();
-        if (!data.name || !data.phone) router.push("/onboarding");
-        else router.push("/dashboard");
-      }
+      const res = await fetch("/api/auth/sync", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ token }),
+});
+
+if (!res.ok) {
+  throw new Error("Auth sync failed");
+}
+
+const data = await res.json();
+
+if (data.needsOnboarding) router.push("/onboarding");
+else router.push("/dashboard");
+
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Google sign-in failed");
     }
   };
 
@@ -123,6 +134,7 @@ export default function LoginPage() {
             onChange={(e) => setEmail(e.target.value)}
             required
           />
+
           <input
             type="password"
             placeholder="Password"
@@ -131,6 +143,7 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             required
           />
+
           {error && (
             <p className="text-red-600 text-sm text-center">{error}</p>
           )}
@@ -161,7 +174,9 @@ export default function LoginPage() {
           className="w-full border border-[#FFE082] flex items-center justify-center gap-2 py-2 rounded-lg hover:bg-[#FFF3E0] transition"
         >
           <img src="/google.svg" alt="Google" className="w-5 h-5" />
-          <span className="text-gray-700 font-medium">Sign in with Google</span>
+          <span className="text-gray-700 font-medium">
+            Sign in with Google
+          </span>
         </button>
 
         <p className="text-sm text-center text-gray-600 mt-3">
@@ -175,7 +190,6 @@ export default function LoginPage() {
         </p>
       </div>
 
-      {/* Footer note */}
       <p className="text-xs text-gray-500 mt-8">
         © 2025 PowerDock — Rent. Charge. Go.
       </p>
