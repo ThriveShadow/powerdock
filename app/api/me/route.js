@@ -19,7 +19,6 @@ export async function POST(req) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // ✅ FIX BigInt serialization
     const safeUser = {
       ...user,
       balance: Number(user.balance), // ← PENTING

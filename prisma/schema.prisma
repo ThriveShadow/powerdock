@@ -17,11 +17,16 @@ model powerbank {
 }
 
 model station {
-  station_id       String   @id
+  station_id       String    @id
+  name             String?
+  latitude         Float?
+  longitude        Float?
   cpu_temp         Float?
-  last_seen        DateTime @default(now()) @db.Timestamptz(6)
-  powerbank_docked String[] @default([])
+  image_url        String?
+  last_seen        DateTime  @default(now()) @db.Timestamptz(6)
+  powerbank_docked String[]  @default([])
 }
+
 
 model User {
   id        String   @id
@@ -38,12 +43,14 @@ model User {
 }
 
 model Transaction {
-  id        BigInt   @id @default(autoincrement())
-  orderId   String  @unique @map("order_id")
-  userId    String  @map("user_id")
-  amount    BigInt
-  status    String
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id         BigInt    @id @default(autoincrement())
+  orderId    String    @unique @map("order_id")
+  userId     String    @map("user_id")
+  amount     BigInt
+  status     String
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  creditedAt DateTime? @map("credited_at") @db.Timestamptz(6)
 
   user User @relation(fields: [userId], references: [id])
 

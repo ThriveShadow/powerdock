@@ -1,28 +1,30 @@
-import { prisma } from "@/lib/prisma";
 import midtransClient from "midtrans-client";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(req) {
   const { amount, email, uid } = await req.json();
 
-  const orderId = `order-${Date.now()}`;
+  const orderId = `TOPUP-${Date.now()}`;
 
-  // 1️⃣ Simpan transaksi PENDING
+  // Create transaction (PENDING)
   await prisma.transaction.create({
     data: {
       orderId,
-      userId: uid,
-      amount: BigInt(amount),
-      status: "PENDING",
+      amount,
+      status: "pending",
+      user: {
+        connect: { id: uid },
+      },
     },
   });
 
-  // 2️⃣ Create Snap token
+  // Create Snap token
   const snap = new midtransClient.Snap({
-    isProduction: false,
+    isProduction: false, // sandbox
     serverKey: process.env.MIDTRANS_SERVER_KEY,
   });
 
-  const token = await snap.createTransactionToken({
+  const snapRes = await snap.createTransaction({
     transaction_details: {
       order_id: orderId,
       gross_amount: amount,
@@ -30,10 +32,7 @@ export async function POST(req) {
     customer_details: {
       email,
     },
-    callbacks: {
-    finish: "http://localhost:3000/topup",
-    },
   });
 
-  return Response.json({ token });
+  return Response.json({ token: snapRes.token });
 }

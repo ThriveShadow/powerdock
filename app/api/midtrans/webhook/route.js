@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(req) {
@@ -6,45 +7,52 @@ export async function POST(req) {
   const {
     order_id,
     transaction_status,
-    payment_type,
+    status_code,
+    gross_amount,
+    signature_key,
   } = body;
 
-  const trx = await prisma.transactions.findUnique({
+  // Verify signature
+  const hash = crypto
+    .createHash("sha512")
+    .update(
+      order_id + status_code + gross_amount + process.env.MIDTRANS_SERVER_KEY
+    )
+    .digest("hex");
+
+  if (hash !== signature_key) {
+    return new Response("Invalid signature", { status: 403 });
+  }
+
+  // Fetch transaction
+  const trx = await prisma.transaction.findUnique({
     where: { orderId: order_id },
   });
 
-  if (!trx) {
-    return Response.json({ message: "Transaction not found" }, { status: 404 });
+  if (!trx) return Response.json({ ok: true });
+
+  // Update status
+  await prisma.transaction.update({
+    where: { orderId: order_id },
+    data: { status: transaction_status },
+  });
+
+  // Credit balance ONCE
+  if (
+    transaction_status === "settlement" &&
+    trx.creditedAt === null
+  ) {
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { uid: trx.uid },
+        data: { balance: { increment: trx.amount } },
+      }),
+      prisma.transaction.update({
+        where: { orderId: order_id },
+        data: { creditedAt: new Date() },
+      }),
+    ]);
   }
 
-  // sudah diproses → stop
-  if (trx.status === "settlement") {
-    return Response.json({ message: "Already processed" });
-  }
-
-  if (transaction_status === "settlement") {
-    // 1️⃣ update transaksi
-    await prisma.transactions.update({
-      where: { orderId: order_id },
-      data: {
-        status: "settlement",
-        paymentType: payment_type,
-      },
-    });
-
-    // 2️⃣ update saldo user
-    await prisma.users.update({
-      where: { id: trx.userId },
-      data: {
-        balance: { increment: trx.amount },
-      },
-    });
-  } else {
-    await prisma.transactions.update({
-      where: { orderId: order_id },
-      data: { status: transaction_status },
-    });
-  }
-
-  return Response.json({ received: true });
+  return Response.json({ ok: true });
 }
