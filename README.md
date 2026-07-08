@@ -2,6 +2,8 @@
 
 **IoT-based smart powerbank rental & charging station**, built around an MQTT-driven hardware/software stack — from a coin-sized RISC-V MCU inside every powerbank, up to a NextJS web-app users tap to rent one.
 
+![Station Layout](https://raw.githubusercontent.com/ThriveShadow/powerdock/refs/heads/master/Images/Layout.png)
+
 > Rent. Charge. Go.
 
 [![Firmware](https://img.shields.io/badge/firmware-ESP32--S3%20%2B%20CH32V003-yellow)]()
@@ -96,6 +98,8 @@ Each powerbank carries its own **CH32V003** MCU (UID + onboard temperature sensi
 ---
 
 ## 🔩 Hardware
+
+![PCB Layout](https://raw.githubusercontent.com/ThriveShadow/powerdock/refs/heads/master/Images/PCB.png)
 
 **Station board** (`Power Dock — Rev 0`)
 - **MCU:** ESP32-S3 (WROOM-1-N16R8)
